@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="manifest.json">
 <title>Gym Rest Timer</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -309,6 +313,15 @@ function formatTime(s) {
   return m + ":" + sec.toString().padStart(2, "0");
 }
 
+function notifyTimerDone() {
+  if ("Notification" in window && Notification.permission === "granted" && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: "TIMER_DONE",
+      sets: sets,
+    });
+  }
+}
+
 function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -329,6 +342,7 @@ function beep() {
     playTone(1320, 0.45, 0.3);
   } catch (e) {}
   if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+  notifyTimerDone();
 }
 
 function selectPreset(seconds) {
@@ -468,6 +482,21 @@ $modalOverlay.addEventListener("click", (e) => {
 });
 
 updateUI();
+
+// Register Service Worker & request notification permission
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+// Request notification permission on first user interaction
+let notifRequested = false;
+document.addEventListener("click", function requestNotif() {
+  if (notifRequested) return;
+  notifRequested = true;
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}, { once: true });
 </script>
 </body>
 </html>
