@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Gym Rest Timer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: #0a0a0a;
+    color: #e0e0e0;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    user-select: none;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  .grain {
+    position: fixed; inset: 0; opacity: 0.03; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .container {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 400px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  /* Header */
+  .header { width: 100%; margin-bottom: 32px; text-align: center; }
+  .header h1 {
+    font-size: 14px; font-weight: 700; letter-spacing: 6px;
+    text-transform: uppercase; color: #555; margin: 0;
+  }
+  .header-line {
+    width: 40px; height: 2px; background: #E63946;
+    margin: 8px auto 0;
+  }
+
+  /* Set counter */
+  .sets-box {
+    display: flex; align-items: center; gap: 16px;
+    background: #111; border: 1px solid #222;
+    border-radius: 12px; padding: 12px 24px;
+    margin-bottom: 32px;
+  }
+  .sets-btn {
+    background: none; border: 1px solid #333; color: #888;
+    width: 36px; height: 36px; border-radius: 8px; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .sets-btn:active { transform: scale(0.96); }
+  .sets-value {
+    text-align: center; min-width: 80px;
+  }
+  .sets-number {
+    font-size: 36px; font-weight: 800; color: #fff;
+    line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .sets-label {
+    font-size: 10px; letter-spacing: 3px; color: #666;
+    text-transform: uppercase; margin-top: 4px;
+  }
+
+  /* Timer ring */
+  .timer-ring {
+    position: relative; width: 264px; height: 264px; margin-bottom: 32px;
+  }
+  .timer-ring svg { transform: rotate(-90deg); }
+  .track { fill: none; stroke: #1a1a1a; stroke-width: 8; }
+  .progress {
+    fill: none; stroke: #E63946; stroke-width: 10;
+    stroke-linecap: round; transition: stroke-dashoffset 0.3s linear;
+  }
+  .tick { transform-origin: 132px 132px; }
+
+  .timer-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .timer-display {
+    font-size: 56px; font-weight: 800; color: #fff;
+    font-variant-numeric: tabular-nums; line-height: 1;
+    transition: color 0.3s;
+  }
+  .timer-display.done { color: #E63946; animation: pulse 0.6s ease-in-out 3; }
+
+  /* Buttons */
+  .actions { display: flex; gap: 12px; margin-bottom: 32px; width: 100%; max-width: 300px; }
+  .btn-start {
+    background: #E63946; color: #fff; border: none;
+    border-radius: 12px; padding: 14px 0;
+    font-size: 14px; font-weight: 700; font-family: inherit;
+    letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+    flex: 1;
+  }
+  .btn-start.running {
+    background: #1a1a1a; color: #888; border: 1px solid #333;
+  }
+  .btn-reset {
+    background: #1a1a1a; color: #888; border: 1px solid #222;
+    border-radius: 12px; padding: 14px 0;
+    font-size: 14px; font-weight: 700; font-family: inherit;
+    letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+    display: none;
+    flex: 1;
+  }
+  .btn-reset.visible { display: block; }
+  .btn-start:active, .btn-reset:active { transform: scale(0.96); }
+
+  /* Presets */
+  .presets-box {
+    width: 100%; background: #111; border: 1px solid #1a1a1a;
+    border-radius: 16px; padding: 20px 16px;
+  }
+  .presets-label {
+    font-size: 10px; letter-spacing: 3px; color: #555;
+    text-transform: uppercase; margin-bottom: 14px; padding-left: 4px;
+  }
+  .presets-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .preset-btn {
+    background: #1a1a1a; color: #888;
+    border: 1px solid #252525; border-radius: 10px;
+    padding: 12px 8px; font-size: 16px; font-weight: 700;
+    font-family: inherit; cursor: pointer; transition: all 0.15s;
+  }
+  .preset-btn.active {
+    background: #E63946; color: #fff; border-color: #E63946;
+  }
+  .preset-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+  .preset-btn:active:not(.disabled) { transform: scale(0.96); }
+  .preset-btn.more-btn {
+    color: #555; font-size: 20px; letter-spacing: 2px;
+  }
+  .preset-btn.recent {
+    border-style: dashed;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(0, 0, 0, 0.85);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #111; border: 1px solid #222;
+    border-radius: 16px; padding: 24px 16px;
+    width: 100%; max-width: 360px; max-height: 80vh;
+    display: flex; flex-direction: column;
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; padding: 0 4px;
+  }
+  .modal-title {
+    font-size: 10px; letter-spacing: 3px; color: #555;
+    text-transform: uppercase;
+  }
+  .modal-close {
+    background: none; border: none; color: #555;
+    font-size: 24px; cursor: pointer; padding: 0 4px;
+    font-family: inherit;
+  }
+  .modal-close:active { transform: scale(0.9); }
+  .modal-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    overflow-y: auto; padding-right: 4px;
+  }
+  .modal-grid::-webkit-scrollbar { width: 4px; }
+  .modal-grid::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<div class="container">
+  <div class="header">
+    <h1>Rest Timer</h1>
+    <div class="header-line"></div>
+  </div>
+
+  <div class="sets-box">
+    <button class="sets-btn" id="sets-minus">−</button>
+    <div class="sets-value">
+      <div class="sets-number" id="sets-count">0</div>
+      <div class="sets-label">series</div>
+    </div>
+    <button class="sets-btn" id="sets-plus">+</button>
+  </div>
+
+  <div class="timer-ring">
+    <svg width="264" height="264" viewBox="0 0 264 264">
+      <circle class="track" cx="132" cy="132" r="120" />
+      <g id="ticks"></g>
+      <circle class="progress" id="progress-ring" cx="132" cy="132" r="120" />
+    </svg>
+    <div class="timer-center">
+      <div class="timer-display" id="timer-display">1:10</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-start" id="btn-start">Iniciar</button>
+    <button class="btn-reset" id="btn-reset">Reset</button>
+  </div>
+
+  <div class="presets-box">
+    <div class="presets-label">Tiempo de descanso</div>
+    <div class="presets-grid" id="presets-grid"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Todos los tiempos</span>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-grid" id="modal-grid"></div>
+  </div>
+</div>
+
+<script>
+// All available presets: every 15s from 0:15 to 5:00, plus 1:10
+const ALL_PRESETS = [];
+for (let s = 15; s <= 300; s += 15) {
+  ALL_PRESETS.push(s);
+  if (s === 60) ALL_PRESETS.push(70); // 1:10 after 1:00
+}
+
+const FIXED_PRESETS = [15, 60, 70, 150]; // 0:15, 1:00, 1:10, 2:30
+
+function getLastUsed() {
+  try {
+    const val = parseInt(localStorage.getItem("gym-timer-last-used"));
+    if (val && ALL_PRESETS.includes(val)) return val;
+  } catch (e) {}
+  return 15; // fallback
+}
+
+function saveLastUsed(seconds) {
+  try { localStorage.setItem("gym-timer-last-used", seconds); } catch (e) {}
+}
+
+const CIRCUMFERENCE = 2 * Math.PI * 120;
+
+let selectedSeconds = 70; // 1:10 default
+let timeLeft = null;
+let isRunning = false;
+let sets = 0;
+let intervalId = null;
+
+const $display = document.getElementById("timer-display");
+const $progress = document.getElementById("progress-ring");
+const $btnStart = document.getElementById("btn-start");
+const $btnReset = document.getElementById("btn-reset");
+const $setsCount = document.getElementById("sets-count");
+const $presetsGrid = document.getElementById("presets-grid");
+const $modalOverlay = document.getElementById("modal-overlay");
+const $modalGrid = document.getElementById("modal-grid");
+
+// Init progress ring
+$progress.style.strokeDasharray = CIRCUMFERENCE;
+$progress.style.strokeDashoffset = CIRCUMFERENCE;
+
+// Draw tick marks
+const ticksG = document.getElementById("ticks");
+for (let i = 0; i < 60; i += 5) {
+  const angle = (i / 60) * 2 * Math.PI - Math.PI / 2;
+  const r1 = 108;
+  const r2 = 116;
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", 132 + r1 * Math.cos(angle));
+  line.setAttribute("y1", 132 + r1 * Math.sin(angle));
+  line.setAttribute("x2", 132 + r2 * Math.cos(angle));
+  line.setAttribute("y2", 132 + r2 * Math.sin(angle));
+  line.setAttribute("stroke", "#333");
+  line.setAttribute("stroke-width", 2);
+  line.classList.add("tick");
+  line.style.transform = "rotate(90deg)";
+  ticksG.appendChild(line);
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return m + ":" + sec.toString().padStart(2, "0");
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const playTone = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = "square";
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    };
+    playTone(880, 0, 0.15);
+    playTone(880, 0.2, 0.15);
+    playTone(1320, 0.45, 0.3);
+  } catch (e) {}
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+}
+
+function selectPreset(seconds) {
+  if (isRunning) return;
+  selectedSeconds = seconds;
+  timeLeft = null;
+  updateUI();
+}
+
+function getVisiblePresets() {
+  return [...FIXED_PRESETS, getLastUsed()];
+}
+
+function renderPresets() {
+  $presetsGrid.innerHTML = "";
+  const visible = getVisiblePresets();
+
+  visible.forEach((seconds, i) => {
+    const btn = document.createElement("button");
+    btn.className = "preset-btn";
+    if (seconds === selectedSeconds) btn.classList.add("active");
+    if (isRunning && seconds !== selectedSeconds) btn.classList.add("disabled");
+    if (i === 4) btn.classList.add("recent");
+    btn.textContent = formatTime(seconds);
+    btn.addEventListener("click", () => selectPreset(seconds));
+    $presetsGrid.appendChild(btn);
+  });
+
+  // "More" button
+  const moreBtn = document.createElement("button");
+  moreBtn.className = "preset-btn more-btn";
+  if (isRunning) moreBtn.classList.add("disabled");
+  moreBtn.textContent = "⋯";
+  moreBtn.addEventListener("click", () => {
+    if (isRunning) return;
+    openModal();
+  });
+  $presetsGrid.appendChild(moreBtn);
+}
+
+function updateUI() {
+  const display = timeLeft !== null ? formatTime(timeLeft) : formatTime(selectedSeconds);
+  $display.textContent = display;
+
+  // Progress
+  const progress = timeLeft !== null ? 1 - timeLeft / selectedSeconds : 0;
+  const offset = CIRCUMFERENCE * (1 - progress);
+  $progress.style.strokeDashoffset = offset;
+  if (timeLeft === null) $progress.style.transition = "none";
+  else $progress.style.transition = "stroke-dashoffset 0.3s linear";
+
+  // Timer display state
+  $display.classList.toggle("done", timeLeft === 0);
+
+  // Buttons
+  $btnStart.textContent = isRunning ? "Reiniciar" : timeLeft === 0 ? "De nuevo" : "Iniciar";
+  $btnStart.classList.toggle("running", isRunning);
+  $btnReset.classList.toggle("visible", isRunning || timeLeft !== null);
+
+  // Sets
+  $setsCount.textContent = sets;
+
+  // Presets
+  renderPresets();
+}
+
+function stop() {
+  clearInterval(intervalId);
+  intervalId = null;
+  isRunning = false;
+}
+
+function start() {
+  stop();
+  timeLeft = selectedSeconds;
+  isRunning = true;
+  updateUI();
+  intervalId = setInterval(() => {
+    timeLeft--;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      stop();
+      sets++;
+      beep();
+    }
+    updateUI();
+  }, 1000);
+}
+
+function reset() {
+  stop();
+  timeLeft = null;
+  sets = 0;
+  updateUI();
+}
+
+// Modal
+function openModal() {
+  $modalGrid.innerHTML = "";
+  ALL_PRESETS.forEach((seconds) => {
+    const btn = document.createElement("button");
+    btn.className = "preset-btn";
+    if (seconds === selectedSeconds) btn.classList.add("active");
+    btn.textContent = formatTime(seconds);
+    btn.addEventListener("click", () => {
+      selectedSeconds = seconds;
+      timeLeft = null;
+      saveLastUsed(seconds);
+      closeModal();
+      updateUI();
+    });
+    $modalGrid.appendChild(btn);
+  });
+  $modalOverlay.classList.add("open");
+}
+
+function closeModal() {
+  $modalOverlay.classList.remove("open");
+}
+
+// Events
+$btnStart.addEventListener("click", start);
+$btnReset.addEventListener("click", reset);
+document.getElementById("sets-minus").addEventListener("click", () => {
+  sets = Math.max(0, sets - 1);
+  updateUI();
+});
+document.getElementById("sets-plus").addEventListener("click", () => {
+  sets++;
+  updateUI();
+});
+document.getElementById("modal-close").addEventListener("click", closeModal);
+$modalOverlay.addEventListener("click", (e) => {
+  if (e.target === $modalOverlay) closeModal();
+});
+
+updateUI();
+</script>
+</body>
+</html>
