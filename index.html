@@ -257,7 +257,7 @@ function getLastUsed() {
     const val = parseInt(localStorage.getItem("gym-timer-last-used"));
     if (val && ALL_PRESETS.includes(val)) return val;
   } catch (e) {}
-  return 15; // fallback
+  return 180; // fallback 3:00
 }
 
 function saveLastUsed(seconds) {
@@ -436,7 +436,7 @@ function openModal() {
     btn.addEventListener("click", () => {
       selectedSeconds = seconds;
       timeLeft = null;
-      saveLastUsed(seconds);
+      if (!FIXED_PRESETS.includes(seconds)) saveLastUsed(seconds);
       closeModal();
       updateUI();
     });
