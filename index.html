@@ -335,6 +335,7 @@ function selectPreset(seconds) {
   if (isRunning) return;
   selectedSeconds = seconds;
   timeLeft = null;
+  sets = 0;
   updateUI();
 }
 
@@ -436,6 +437,7 @@ function openModal() {
     btn.addEventListener("click", () => {
       selectedSeconds = seconds;
       timeLeft = null;
+      sets = 0;
       if (!FIXED_PRESETS.includes(seconds)) saveLastUsed(seconds);
       closeModal();
       updateUI();
