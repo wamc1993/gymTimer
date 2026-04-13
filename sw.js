@@ -50,7 +50,7 @@ function scheduleNotification(endTime, sets) {
     timerTimeout = null;
     self.registration.showNotification("Rest Timer", {
       body: "¡Descanso terminado! Serie #" + pendingSets,
-      icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a0a'/%3E%3Ccircle cx='256' cy='240' r='140' fill='none' stroke='%23E63946' stroke-width='14'/%3E%3Ccircle cx='256' cy='240' r='8' fill='%23E63946'/%3E%3Ctext x='256' y='440' text-anchor='middle' fill='%23E63946' font-family='Arial' font-weight='800' font-size='64'%3EREST%3C/text%3E%3C/svg%3E",
+      icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a0a'/%3E%3Ccircle cx='256' cy='256' r='136' fill='none' stroke='%23E63946' stroke-width='14'/%3E%3Ccircle cx='256' cy='256' r='8' fill='%23E63946'/%3E%3C/svg%3E",
       vibrate: [200, 100, 200, 100, 400],
       tag: "timer-done",   // mismo tag = reemplaza notif anterior, nunca duplica
       renotify: true,
