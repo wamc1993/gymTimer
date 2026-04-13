@@ -275,6 +275,7 @@ let timeLeft = null;
 let isRunning = false;
 let sets = 0;
 let intervalId = null;
+let endTime = null; // timestamp en ms cuando termina el timer
 
 const $display = document.getElementById("timer-display");
 const $progress = document.getElementById("progress-ring");
@@ -313,16 +314,26 @@ function formatTime(s) {
   return m + ":" + sec.toString().padStart(2, "0");
 }
 
-function notifyTimerDone() {
-  if ("Notification" in window && Notification.permission === "granted" && navigator.serviceWorker.controller) {
+// Notifica al SW para que programe la notificación con su propio setTimeout
+function scheduleSwNotification(msUntilEnd) {
+  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({
-      type: "TIMER_DONE",
-      sets: sets,
+      type: "START_TIMER",
+      endTime: endTime,
+      sets: sets, // ya incrementado al presionar el botón
     });
   }
 }
 
+// Cancela la notificación pendiente en el SW (p.ej. al hacer reset)
+function cancelSwNotification() {
+  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: "STOP_TIMER" });
+  }
+}
+
 function beep() {
+  // Audio + vibración en primer plano
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const playTone = (freq, start, dur) => {
@@ -342,7 +353,8 @@ function beep() {
     playTone(1320, 0.45, 0.3);
   } catch (e) {}
   if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
-  notifyTimerDone();
+  // La notificación push la maneja el SW directamente — no la disparamos aquí
+  // para evitar duplicados. El SW la programa al iniciar el timer.
 }
 
 function selectPreset(seconds) {
@@ -416,29 +428,63 @@ function stop() {
   isRunning = false;
 }
 
+function onTimerFinished() {
+  timeLeft = 0;
+  stop();
+  beep();
+  updateUI();
+}
+
 function start() {
   stop();
-  timeLeft = selectedSeconds;
+  // Anclar el tiempo de fin en tiempo real — inmune a throttling del browser
+  endTime = Date.now() + selectedSeconds * 1000;
   isRunning = true;
+  timeLeft = selectedSeconds;
   updateUI();
+
+  // Aumentar series al presionar el botón
+  sets++;
+
+  // Delegar notificación al Service Worker para que la dispare aunque JS esté frozen
+  scheduleSwNotification();
+
+  // Intervalo a 500ms para mayor precisión sin depender de sus ticks exactos
   intervalId = setInterval(() => {
-    timeLeft--;
-    if (timeLeft <= 0) {
-      timeLeft = 0;
-      stop();
-      sets++;
-      beep();
+    const remaining = Math.round((endTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      onTimerFinished();
+    } else {
+      timeLeft = remaining;
+      updateUI();
     }
-    updateUI();
-  }, 1000);
+  }, 500);
 }
 
 function reset() {
   stop();
+  cancelSwNotification();
   timeLeft = null;
+  endTime = null;
   sets = 0;
   updateUI();
 }
+
+// ─── Page Visibility API ────────────────────────────────────────────────────
+// Cuando el usuario vuelve a la app desde Facebook, WhatsApp, etc.,
+// recalculamos el tiempo restante inmediatamente con Date.now()
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && isRunning && endTime !== null) {
+    const remaining = Math.round((endTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      // El timer terminó mientras estábamos en background
+      onTimerFinished();
+    } else {
+      timeLeft = remaining;
+      updateUI();
+    }
+  }
+});
 
 // Modal
 function openModal() {
