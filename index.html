@@ -276,6 +276,7 @@ let isRunning = false;
 let sets = 0;
 let intervalId = null;
 let endTime = null; // timestamp en ms cuando termina el timer
+let wakeLock = null; // Wake Lock para mantener JS activo en background
 
 const $display = document.getElementById("timer-display");
 const $progress = document.getElementById("progress-ring");
@@ -431,6 +432,7 @@ function stop() {
 function onTimerFinished() {
   timeLeft = 0;
   stop();
+  releaseWakeLock();
   beep();
   updateUI();
 }
@@ -445,6 +447,9 @@ function start() {
 
   // Aumentar series al presionar el botón
   sets++;
+
+  // Wake Lock: mantener JS activo mientras corre el timer
+  requestWakeLock();
 
   // Delegar notificación al Service Worker para que la dispare aunque JS esté frozen
   scheduleSwNotification();
@@ -463,6 +468,7 @@ function start() {
 
 function reset() {
   stop();
+  releaseWakeLock();
   cancelSwNotification();
   timeLeft = null;
   endTime = null;
@@ -470,11 +476,32 @@ function reset() {
   updateUI();
 }
 
+// ─── Wake Lock ───────────────────────────────────────────────────────────────
+// Mantiene el navegador activo mientras el timer corre, evitando que Android
+// congele el JS y el SW cuando hay otras apps activas en simultáneo.
+
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+  } catch (e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
 // ─── Page Visibility API ────────────────────────────────────────────────────
 // Cuando el usuario vuelve a la app desde Facebook, WhatsApp, etc.,
 // recalculamos el tiempo restante inmediatamente con Date.now()
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && isRunning && endTime !== null) {
+    // Re-adquirir wake lock: Android lo libera automáticamente al ir a background
+    requestWakeLock();
+
     const remaining = Math.round((endTime - Date.now()) / 1000);
     if (remaining <= 0) {
       // El timer terminó mientras estábamos en background
