@@ -277,6 +277,7 @@ let sets = 0;
 let intervalId = null;
 let endTime = null; // timestamp en ms cuando termina el timer
 let wakeLock = null; // Wake Lock para mantener JS activo en background
+let silentAudioCtx = null; // AudioContext silencioso: mantiene Android activo en background
 
 const $display = document.getElementById("timer-display");
 const $progress = document.getElementById("progress-ring");
@@ -315,26 +316,41 @@ function formatTime(s) {
   return m + ":" + sec.toString().padStart(2, "0");
 }
 
-// Notifica al SW para que programe la notificación con su propio setTimeout
-function scheduleSwNotification(msUntilEnd) {
+// Avisa al SW que dispare la notificación (hilo principal sigue siendo el responsable)
+function notifyTimerDone() {
   if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({
-      type: "START_TIMER",
-      endTime: endTime,
-      sets: sets, // ya incrementado al presionar el botón
+      type: "TIMER_DONE",
+      sets: sets,
     });
   }
 }
 
-// Cancela la notificación pendiente en el SW (p.ej. al hacer reset)
-function cancelSwNotification() {
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: "STOP_TIMER" });
+// ─── Audio silencioso ────────────────────────────────────────────────────────
+// Un oscilador casi inaudible (gain 0.001) en loop le indica a Android que hay
+// una sesión de audio activa → el sistema no congela el JS del browser.
+
+function startSilentAudio() {
+  stopSilentAudio();
+  try {
+    silentAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = silentAudioCtx.createOscillator();
+    const gain = silentAudioCtx.createGain();
+    gain.gain.value = 0.001; // prácticamente inaudible
+    osc.connect(gain);
+    gain.connect(silentAudioCtx.destination);
+    osc.start();
+  } catch (e) {}
+}
+
+function stopSilentAudio() {
+  if (silentAudioCtx) {
+    try { silentAudioCtx.close(); } catch (e) {}
+    silentAudioCtx = null;
   }
 }
 
 function beep() {
-  // Audio + vibración en primer plano
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const playTone = (freq, start, dur) => {
@@ -354,8 +370,7 @@ function beep() {
     playTone(1320, 0.45, 0.3);
   } catch (e) {}
   if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
-  // La notificación push la maneja el SW directamente — no la disparamos aquí
-  // para evitar duplicados. El SW la programa al iniciar el timer.
+  notifyTimerDone(); // hilo principal le dice al SW que muestre la notificación
 }
 
 function selectPreset(seconds) {
@@ -433,6 +448,7 @@ function onTimerFinished() {
   timeLeft = 0;
   stop();
   releaseWakeLock();
+  stopSilentAudio();
   beep();
   updateUI();
 }
@@ -451,8 +467,8 @@ function start() {
   // Wake Lock: mantener JS activo mientras corre el timer
   requestWakeLock();
 
-  // Delegar notificación al Service Worker para que la dispare aunque JS esté frozen
-  scheduleSwNotification();
+  // Audio silencioso: evita que Android congele el JS cuando la app está en background
+  startSilentAudio();
 
   // Intervalo a 500ms para mayor precisión sin depender de sus ticks exactos
   intervalId = setInterval(() => {
@@ -469,7 +485,7 @@ function start() {
 function reset() {
   stop();
   releaseWakeLock();
-  cancelSwNotification();
+  stopSilentAudio();
   timeLeft = null;
   endTime = null;
   sets = 0;
